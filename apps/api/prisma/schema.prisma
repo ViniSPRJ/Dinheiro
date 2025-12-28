@@ -1,0 +1,585 @@
+// Dinheiro - Database Schema
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USERS & AUTH ============
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  passwordHash  String? // Null if OAuth
+  name          String?
+  avatarUrl     String?
+
+  // Auth providers
+  googleId String? @unique
+  appleId  String? @unique
+
+  // Preferences
+  currency   String @default("BRL") // BRL, USD
+  locale     String @default("pt-BR")
+  dateFormat String @default("DD/MM/YYYY")
+  theme      String @default("light") // light, dark, auto
+
+  // Onboarding
+  onboardingCompleted Boolean @default(false)
+
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? // Soft delete
+  lastLoginAt DateTime?
+
+  // Relations
+  accounts       Account[]
+  transactions   Transaction[]
+  categories     Category[]
+  budgets        Budget[]
+  investments    Investment[]
+  goals          Goal[]
+  recurringRules RecurringRule[]
+  subscriptions  Subscription[]
+  tags           Tag[]
+  notifications  Notification[]
+  mlModels       MLModel[]
+  customRules    CustomRule[]
+  netWorthSnapshots NetWorthSnapshot[]
+
+  @@index([email])
+}
+
+// ============ ACCOUNTS ============
+
+model Account {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String // "Nubank Roxinho"
+  type        AccountType
+  institution String? // "Nubank", "Itau"
+  currency    String      @default("BRL")
+
+  initialBalance Decimal @db.Decimal(15, 2)
+  currentBalance Decimal @db.Decimal(15, 2)
+
+  // Customization
+  color String? @default("#6366f1")
+  icon  String? @default("wallet")
+
+  // Status
+  isActive   Boolean @default(true)
+  isArchived Boolean @default(false)
+
+  // Metadata
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  transactions  Transaction[]
+  transfersFrom Transaction[] @relation("TransferFrom")
+  transfersTo   Transaction[] @relation("TransferTo")
+  investments   Investment[]
+  recurringRules RecurringRule[]
+
+  @@index([userId, isActive])
+}
+
+enum AccountType {
+  CHECKING // Conta corrente
+  SAVINGS // Poupanca
+  CREDIT_CARD // Cartao de credito
+  INVESTMENT // Investimentos
+  CRYPTO // Criptomoedas
+  CASH // Dinheiro fisico
+  LOAN // Emprestimo (saldo negativo)
+  PROPERTY // Imoveis
+  OTHER // Outros
+}
+
+// ============ TRANSACTIONS ============
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        TransactionType
+  amount      Decimal         @db.Decimal(15, 2)
+  description String
+  date        DateTime        @db.Date
+
+  // Categorization
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  // Account links
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id])
+
+  // Transfers
+  transferFromId String?
+  transferFrom   Account? @relation("TransferFrom", fields: [transferFromId], references: [id])
+  transferToId   String?
+  transferTo     Account? @relation("TransferTo", fields: [transferToId], references: [id])
+
+  // Status
+  status    TransactionStatus @default(CONFIRMED)
+  isPending Boolean           @default(false)
+
+  // Recurrence
+  recurringRuleId String?
+  recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id])
+
+  // Tags
+  tags Tag[] @relation("TransactionTags")
+
+  // Notes
+  notes String?
+
+  // ML
+  categoryConfidence Float? // 0.0 - 1.0
+  mlCategorized      Boolean @default(false)
+
+  // External ID (for Open Finance)
+  externalId String? @unique
+
+  // Metadata
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, date])
+  @@index([userId, categoryId])
+  @@index([accountId])
+  @@index([date])
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+  TRANSFER
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  RECONCILED
+}
+
+// ============ CATEGORIES ============
+
+model Category {
+  id     String  @id @default(cuid())
+  userId String? // Null = global category (default)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name  String // "Alimentacao", "Transporte"
+  icon  String? @default("folder")
+  color String? @default("#6366f1")
+
+  // Type
+  type CategoryType @default(EXPENSE)
+
+  // Hierarchy (future)
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+
+  // Metadata
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  transactions Transaction[]
+  budgets      Budget[]
+  customRules  CustomRule[]
+  goals        Goal[]
+  subscriptions Subscription[]
+  recurringRules RecurringRule[]
+
+  @@unique([userId, name])
+  @@index([userId, type])
+}
+
+enum CategoryType {
+  EXPENSE
+  INCOME
+  TRANSFER
+}
+
+// ============ BUDGETS ============
+
+model Budget {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  // Values
+  amount Decimal      @db.Decimal(15, 2) // Monthly limit
+  period BudgetPeriod @default(MONTHLY)
+
+  // Rollover
+  rolloverEnabled Boolean @default(false)
+  rolloverBalance Decimal @db.Decimal(15, 2) @default(0) // Accumulated from previous months
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Metadata
+  startDate DateTime  @db.Date // When it starts
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([userId, categoryId, period])
+  @@index([userId, isActive])
+}
+
+enum BudgetPeriod {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// ============ INVESTMENTS ============
+
+model Investment {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type   InvestmentType
+  name   String // "PETR4", "BTC", "MXRF11"
+  ticker String? // For stocks, FIIs, crypto
+
+  // Holdings
+  quantity      Decimal? @db.Decimal(20, 8) // Quantity of shares/coins
+  averagePrice  Decimal  @db.Decimal(15, 2) // Average purchase price
+  totalInvested Decimal  @db.Decimal(15, 2) // Total invested value
+
+  // Account/Broker
+  accountId   String?
+  account     Account? @relation(fields: [accountId], references: [id])
+  institution String? // "XP", "Binance"
+
+  // For fixed income
+  interestRate Decimal?  @db.Decimal(5, 2) // Ex: 12.50 (%)
+  maturityDate DateTime? @db.Date
+
+  // For real estate
+  address        String?
+  estimatedValue Decimal? @db.Decimal(15, 2)
+
+  // Notes
+  notes String?
+
+  // Metadata
+  acquisitionDate DateTime  @db.Date
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@index([userId, type])
+}
+
+enum InvestmentType {
+  STOCK // Acoes
+  FII // Fundos Imobiliarios
+  CRYPTO // Criptomoedas
+  TESOURO_DIRETO // Tesouro Direto
+  CDB // CDB
+  LCI // LCI
+  LCA // LCA
+  FUND // Fundos de Investimento
+  PROPERTY // Imoveis
+  OTHER // Outros
+}
+
+// ============ GOALS ============
+
+model Goal {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String // "Viagem Europa"
+  targetAmount  Decimal  @db.Decimal(15, 2)
+  currentAmount Decimal  @db.Decimal(15, 2) @default(0)
+  targetDate    DateTime @db.Date
+
+  // Customization
+  icon  String? @default("target")
+  color String? @default("#6366f1")
+
+  // Linked category (optional)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  // Status
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+
+  // Metadata
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  contributions GoalContribution[]
+
+  @@index([userId, isCompleted])
+}
+
+model GoalContribution {
+  id     String @id @default(cuid())
+  goalId String
+  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  amount Decimal  @db.Decimal(15, 2)
+  date   DateTime @db.Date
+  notes  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([goalId, date])
+}
+
+// ============ RECURRING RULES ============
+
+model RecurringRule {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Transaction template
+  type        TransactionType
+  amount      Decimal         @db.Decimal(15, 2)
+  description String
+  categoryId  String
+  category    Category        @relation(fields: [categoryId], references: [id])
+  accountId   String
+  account     Account         @relation(fields: [accountId], references: [id])
+
+  // Recurrence
+  frequency RecurrenceFrequency
+  startDate DateTime            @db.Date
+  endDate   DateTime?           @db.Date // Null = indefinite
+
+  // Status
+  isActive      Boolean   @default(true)
+  lastCreatedAt DateTime? // Last time it generated a transaction
+
+  // Metadata
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  transactions Transaction[]
+
+  @@index([userId, isActive])
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// ============ SUBSCRIPTIONS ============
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String // "Netflix", "Spotify"
+  amount      Decimal             @db.Decimal(15, 2)
+  frequency   RecurrenceFrequency @default(MONTHLY)
+  billingDate Int // Day of month (1-31)
+  categoryId  String?
+  category    Category?           @relation(fields: [categoryId], references: [id])
+
+  // Status
+  isActive    Boolean   @default(true)
+  cancelledAt DateTime?
+
+  // Tracking
+  lastPaymentDate DateTime? @db.Date
+  nextPaymentDate DateTime? @db.Date
+  totalPaid       Decimal   @db.Decimal(15, 2) @default(0)
+
+  // Notes
+  notes String?
+
+  // Metadata
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, isActive, nextPaymentDate])
+}
+
+// ============ TAGS ============
+
+model Tag {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name  String // "viagem-paris", "trabalho"
+  color String? @default("#6366f1")
+
+  // Relations
+  transactions Transaction[] @relation("TransactionTags")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// ============ CUSTOM RULES (Categorization) ============
+
+model CustomRule {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name String // "Uber sempre Transporte"
+
+  // Conditions (JSON)
+  conditions Json // { field: "description", operator: "contains", value: "Uber" }
+
+  // Actions
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  autoApply  Boolean  @default(true)
+
+  // Priority (higher priority rules are applied first)
+  priority Int @default(0)
+
+  // Status
+  isActive Boolean @default(true)
+
+  // Metadata
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, isActive, priority])
+}
+
+// ============ NOTIFICATIONS ============
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  title   String
+  message String
+
+  // Link/action
+  actionUrl   String?
+  actionLabel String?
+
+  // Status
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
+
+enum NotificationType {
+  BUDGET_WARNING // 80% of budget
+  BUDGET_EXCEEDED // >100% of budget
+  GOAL_MILESTONE // 25%, 50%, etc
+  GOAL_ACHIEVED // 100%
+  SUBSCRIPTION_DUE // 3 days before
+  LARGE_EXPENSE // Large expense
+  INSIGHT // AI insights
+  SYSTEM // System notices
+}
+
+// ============ ML MODELS ============
+
+model MLModel {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  modelType String @default("categorization")
+  version   Int    @default(1)
+
+  // Serialized model (path to file or blob)
+  modelData Bytes? // If small, store here
+  modelPath String? // S3 path if large
+
+  // Metrics
+  accuracy     Float?
+  trainingSize Int? // Number of samples used
+
+  // Metadata
+  trainedAt DateTime @default(now())
+
+  @@unique([userId, modelType])
+  @@index([userId])
+}
+
+// ============ NET WORTH SNAPSHOTS ============
+
+model NetWorthSnapshot {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date     DateTime @db.Date
+  netWorth Decimal  @db.Decimal(15, 2)
+
+  // Breakdown
+  totalAssets      Decimal @db.Decimal(15, 2)
+  totalLiabilities Decimal @db.Decimal(15, 2)
+
+  // JSON with details per category
+  breakdown Json? // { accounts: 10000, investments: 50000, ... }
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// ============ REFRESH TOKENS ============
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([token])
+}

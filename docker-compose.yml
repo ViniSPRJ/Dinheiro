@@ -1,0 +1,97 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: dinheiro-postgres
+    environment:
+      POSTGRES_USER: dinheiro
+      POSTGRES_PASSWORD: dinheiro_dev_password
+      POSTGRES_DB: dinheiro_dev
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dinheiro -d dinheiro_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: dinheiro-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: dinheiro-api
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://dinheiro:dinheiro_dev_password@postgres:5432/dinheiro_dev
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-super-secret-jwt-key-min-32-chars-dev
+      JWT_REFRESH_SECRET: your-super-secret-refresh-key-min-32-chars-dev
+      FRONTEND_URL: http://localhost:5173
+      ML_SERVICE_URL: http://ml-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend Web
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: dinheiro-web
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # ML Service (Python)
+  ml-service:
+    build:
+      context: ./apps/ml-service
+      dockerfile: Dockerfile
+    container_name: dinheiro-ml
+    ports:
+      - '8000:8000'
+    environment:
+      DATABASE_URL: postgresql://dinheiro:dinheiro_dev_password@postgres:5432/dinheiro_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/ml-service:/app
+      - ml_models:/app/models
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  redis_data:
+  ml_models:
