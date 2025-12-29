@@ -21,7 +21,7 @@ const transactionSchema = z.object({
   accountId: z.string().optional(),
   transferFromId: z.string().optional(),
   transferToId: z.string().optional(),
-  status: z.enum(['PENDING', 'CONFIRMED', 'RECONCILED']).default('CONFIRMED'),
+  status: z.enum(['PENDING', 'CONFIRMED', 'RECONCILED']),
   notes: z.string().max(1000).optional(),
 });
 

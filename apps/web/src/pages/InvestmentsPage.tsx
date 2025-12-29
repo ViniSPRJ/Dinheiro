@@ -71,14 +71,14 @@ export default function InvestmentsPage() {
   };
 
   // Group investments by type for the list view
-  const groupedInvestments = useMemo(() => {
+  const groupedInvestments = useMemo((): Record<string, Investment[]> => {
     if (!investmentsData?.investments) return {};
 
     return investmentsData.investments.reduce((acc, inv) => {
       if (!acc[inv.type]) acc[inv.type] = [];
       acc[inv.type].push(inv);
       return acc;
-    }, {} as Record<InvestmentType, Investment[]>);
+    }, {} as Record<string, Investment[]>);
   }, [investmentsData]);
 
   if (isLoading) {
@@ -293,7 +293,7 @@ export default function InvestmentsPage() {
         <div className="space-y-6">
           {filterType === 'ALL' ? (
             // Grouped view
-            Object.entries(groupedInvestments).map(([type, investments]) => {
+            Object.entries(groupedInvestments).map(([type, investments]: [string, Investment[]]) => {
               const config = investmentTypeConfig[type as InvestmentType];
               return (
                 <div key={type}>

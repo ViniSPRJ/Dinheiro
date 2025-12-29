@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma.js';
 import { config } from '../config/index.js';
@@ -34,7 +34,7 @@ function generateAccessToken(userId: string, email: string): string {
   return jwt.sign(
     { sub: userId, email },
     config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn }
+    { expiresIn: config.jwt.expiresIn } as SignOptions
   );
 }
 
@@ -42,7 +42,7 @@ function generateRefreshToken(userId: string): string {
   return jwt.sign(
     { sub: userId },
     config.jwt.refreshSecret,
-    { expiresIn: config.jwt.refreshExpiresIn }
+    { expiresIn: config.jwt.refreshExpiresIn } as SignOptions
   );
 }
 

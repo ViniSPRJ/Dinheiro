@@ -9,7 +9,7 @@ const accountSchema = z.object({
   name: z.string().min(1, 'Nome e obrigatorio').max(100),
   type: z.enum(['CHECKING', 'SAVINGS', 'CREDIT_CARD', 'INVESTMENT', 'CRYPTO', 'CASH', 'LOAN', 'PROPERTY', 'OTHER']),
   institution: z.string().max(100).optional(),
-  currency: z.enum(['BRL', 'USD']).default('BRL'),
+  currency: z.enum(['BRL', 'USD']),
   initialBalance: z.number(),
   color: z.string().optional(),
 });

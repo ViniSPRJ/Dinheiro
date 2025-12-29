@@ -12,8 +12,8 @@ import clsx from 'clsx';
 const budgetSchema = z.object({
   categoryId: z.string().min(1, 'Selecione uma categoria'),
   amount: z.number().positive('Valor deve ser positivo'),
-  period: z.enum(['WEEKLY', 'MONTHLY', 'YEARLY']).default('MONTHLY'),
-  rolloverEnabled: z.boolean().default(false),
+  period: z.enum(['WEEKLY', 'MONTHLY', 'YEARLY']),
+  rolloverEnabled: z.boolean(),
   startDate: z.string().min(1, 'Data e obrigatoria'),
 });
 

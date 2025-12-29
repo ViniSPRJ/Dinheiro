@@ -16,7 +16,7 @@ import clsx from 'clsx';
 const goalSchema = z.object({
   name: z.string().min(1, 'Nome e obrigatorio').max(200),
   targetAmount: z.number().positive('Valor deve ser positivo'),
-  currentAmount: z.number().min(0).default(0),
+  currentAmount: z.number().min(0),
   targetDate: z.string().min(1, 'Data e obrigatoria'),
   icon: z.string().optional(),
   color: z.string().optional(),
@@ -148,7 +148,7 @@ export default function GoalModal({ isOpen, onClose, goal }: GoalModalProps) {
                   'h-8 w-8 rounded-full transition-all',
                   selectedColor === color.value && 'ring-2 ring-offset-2'
                 )}
-                style={{ backgroundColor: color.value, ringColor: color.value }}
+                style={{ backgroundColor: color.value }}
                 title={color.label}
               />
             ))}
