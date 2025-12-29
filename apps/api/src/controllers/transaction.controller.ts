@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma.js';
 import { NotFoundError, BadRequestError } from '../middleware/errorHandler.js';
-import { Prisma } from '@prisma/client';
+import { Prisma, Transaction } from '@prisma/client';
 
 const createTransactionSchema = z.object({
   type: z.enum(['EXPENSE', 'INCOME', 'TRANSFER']),
@@ -31,6 +31,72 @@ const querySchema = z.object({
   search: z.string().optional(),
   status: z.enum(['PENDING', 'CONFIRMED', 'RECONCILED']).optional(),
 });
+
+type BalanceContext = Pick<Transaction, 'type' | 'amount' | 'accountId' | 'transferFromId' | 'transferToId'>;
+
+const applyBalanceEffect = async (
+  tx: Prisma.TransactionClient,
+  context: BalanceContext
+) => {
+  const amount = Number(context.amount);
+
+  if (context.type === 'EXPENSE' && context.accountId) {
+    await tx.account.update({
+      where: { id: context.accountId },
+      data: { currentBalance: { decrement: amount } },
+    });
+  } else if (context.type === 'INCOME' && context.accountId) {
+    await tx.account.update({
+      where: { id: context.accountId },
+      data: { currentBalance: { increment: amount } },
+    });
+  } else if (context.type === 'TRANSFER') {
+    if (context.transferFromId) {
+      await tx.account.update({
+        where: { id: context.transferFromId },
+        data: { currentBalance: { decrement: amount } },
+      });
+    }
+    if (context.transferToId) {
+      await tx.account.update({
+        where: { id: context.transferToId },
+        data: { currentBalance: { increment: amount } },
+      });
+    }
+  }
+};
+
+const reverseBalanceEffect = async (
+  tx: Prisma.TransactionClient,
+  context: BalanceContext
+) => {
+  const amount = Number(context.amount);
+
+  if (context.type === 'EXPENSE' && context.accountId) {
+    await tx.account.update({
+      where: { id: context.accountId },
+      data: { currentBalance: { increment: amount } },
+    });
+  } else if (context.type === 'INCOME' && context.accountId) {
+    await tx.account.update({
+      where: { id: context.accountId },
+      data: { currentBalance: { decrement: amount } },
+    });
+  } else if (context.type === 'TRANSFER') {
+    if (context.transferFromId) {
+      await tx.account.update({
+        where: { id: context.transferFromId },
+        data: { currentBalance: { increment: amount } },
+      });
+    }
+    if (context.transferToId) {
+      await tx.account.update({
+        where: { id: context.transferToId },
+        data: { currentBalance: { decrement: amount } },
+      });
+    }
+  }
+};
 
 export class TransactionController {
   static async getAll(req: Request, res: Response, next: NextFunction) {
@@ -228,30 +294,42 @@ export class TransactionController {
         throw new NotFoundError('Transaction not found');
       }
 
-      const transaction = await prisma.$transaction(async (tx) => {
-        // Reverse old balance changes if amount or account changed
-        if (data.amount !== undefined || data.accountId !== undefined) {
-          if (existing.type === 'EXPENSE' && existing.accountId) {
-            await tx.account.update({
-              where: { id: existing.accountId },
-              data: { currentBalance: { increment: Number(existing.amount) } },
-            });
-          } else if (existing.type === 'INCOME' && existing.accountId) {
-            await tx.account.update({
-              where: { id: existing.accountId },
-              data: { currentBalance: { decrement: Number(existing.amount) } },
-            });
-          }
+      const targetType = data.type ?? existing.type;
+      const targetAmount = data.amount ?? Number(existing.amount);
+      const targetAccountId = data.accountId ?? existing.accountId;
+      const targetTransferFromId = data.transferFromId ?? existing.transferFromId;
+      const targetTransferToId = data.transferToId ?? existing.transferToId;
+
+      if (targetType === 'TRANSFER') {
+        if (!targetTransferFromId || !targetTransferToId) {
+          throw new BadRequestError('Transfer requires both source and destination accounts');
         }
+        if (targetTransferFromId === targetTransferToId) {
+          throw new BadRequestError('Source and destination accounts must be different');
+        }
+      }
+
+      const transaction = await prisma.$transaction(async (tx) => {
+        // Always reverse previous balance impact before applying updates
+        await reverseBalanceEffect(tx, existing);
 
         // Update transaction
         const updated = await tx.transaction.update({
           where: { id },
           data: {
-            ...data,
-            tags: data.tagIds ? {
-              set: data.tagIds.map(id => ({ id })),
-            } : undefined,
+            description: data.description ?? existing.description,
+            date: data.date ?? existing.date,
+            categoryId: data.categoryId ?? existing.categoryId,
+            status: data.status ?? existing.status,
+            notes: data.notes ?? existing.notes,
+            amount: targetAmount,
+            type: targetType,
+            accountId: targetType === 'TRANSFER' ? null : targetAccountId,
+            transferFromId: targetType === 'TRANSFER' ? targetTransferFromId : null,
+            transferToId: targetType === 'TRANSFER' ? targetTransferToId : null,
+            tags: data.tagIds
+              ? { set: data.tagIds.map((tagId) => ({ id: tagId })) }
+              : undefined,
           },
           include: {
             category: { select: { id: true, name: true, icon: true, color: true } },
@@ -260,22 +338,14 @@ export class TransactionController {
           },
         });
 
-        // Apply new balance changes
-        const newAmount = data.amount ?? Number(existing.amount);
-        const newAccountId = data.accountId ?? existing.accountId;
-        const newType = data.type ?? existing.type;
-
-        if (newType === 'EXPENSE' && newAccountId) {
-          await tx.account.update({
-            where: { id: newAccountId },
-            data: { currentBalance: { decrement: newAmount } },
-          });
-        } else if (newType === 'INCOME' && newAccountId) {
-          await tx.account.update({
-            where: { id: newAccountId },
-            data: { currentBalance: { increment: newAmount } },
-          });
-        }
+        // Re-apply balance impact with updated data
+        await applyBalanceEffect(tx, {
+          type: targetType,
+          amount: targetAmount,
+          accountId: targetAccountId,
+          transferFromId: targetTransferFromId,
+          transferToId: targetTransferToId,
+        });
 
         return updated;
       });
@@ -385,25 +455,44 @@ export class TransactionController {
       const userId = req.userId!;
       const { ids } = z.object({ ids: z.array(z.string()) }).parse(req.body);
 
-      await prisma.transaction.updateMany({
+      const transactions = await prisma.transaction.findMany({
         where: {
           id: { in: ids },
           userId,
           deletedAt: null,
         },
-        data: { deletedAt: new Date() },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          accountId: true,
+          transferFromId: true,
+          transferToId: true,
+        },
+      });
+
+      const deletedAt = new Date();
+
+      await prisma.$transaction(async (tx) => {
+        for (const txToDelete of transactions) {
+          await tx.transaction.update({
+            where: { id: txToDelete.id },
+            data: { deletedAt },
+          });
+          await reverseBalanceEffect(tx, txToDelete);
+        }
       });
 
       res.json({
         status: 'success',
-        message: `${ids.length} transactions deleted`,
+        message: `${transactions.length} transactions deleted`,
       });
     } catch (error) {
       next(error);
     }
   }
 
-  static async import(req: Request, res: Response, next: NextFunction) {
+  static async import(req: Request, res: Response) {
     // TODO: Implement CSV/OFX import
     res.status(501).json({
       status: 'error',

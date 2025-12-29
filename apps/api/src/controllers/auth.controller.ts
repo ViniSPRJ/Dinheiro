@@ -425,22 +425,22 @@ export class AuthController {
   }
 
   // OAuth placeholders - to be implemented with Passport.js
-  static async googleAuth(req: Request, res: Response, next: NextFunction) {
+  static async googleAuth(req: Request, res: Response) {
     // TODO: Implement Google OAuth with Passport.js
     res.redirect(`${config.frontendUrl}/auth/google-not-implemented`);
   }
 
-  static async googleCallback(req: Request, res: Response, next: NextFunction) {
+  static async googleCallback(req: Request, res: Response) {
     // TODO: Handle Google OAuth callback
     res.redirect(`${config.frontendUrl}/dashboard`);
   }
 
-  static async appleAuth(req: Request, res: Response, next: NextFunction) {
+  static async appleAuth(req: Request, res: Response) {
     // TODO: Implement Apple Sign In with Passport.js
     res.redirect(`${config.frontendUrl}/auth/apple-not-implemented`);
   }
 
-  static async appleCallback(req: Request, res: Response, next: NextFunction) {
+  static async appleCallback(req: Request, res: Response) {
     // TODO: Handle Apple Sign In callback
     res.redirect(`${config.frontendUrl}/dashboard`);
   }

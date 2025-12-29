@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { prisma } from '../utils/prisma.js';
-import { Prisma } from '@prisma/client';
 
 const periodSchema = z.object({
   period: z.enum(['week', 'month', 'quarter', 'year', 'all']).default('month'),
@@ -192,7 +191,7 @@ export class AnalyticsController {
   static async getCashFlow(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.userId!;
-      const { period } = periodSchema.parse(req.query);
+      periodSchema.parse(req.query);
 
       // Get last 12 months of data
       const months: { month: string; income: number; expenses: number }[] = [];
@@ -258,7 +257,9 @@ export class AnalyticsController {
         orderBy: { _sum: { amount: 'desc' } },
       });
 
-      const categoryIds = expenses.map((e) => e.categoryId).filter(Boolean) as string[];
+      const categoryIds = expenses
+        .map((e) => e.categoryId)
+        .filter((categoryId): categoryId is string => Boolean(categoryId));
       const categories = await prisma.category.findMany({
         where: { id: { in: categoryIds } },
       });
