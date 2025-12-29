@@ -35,16 +35,16 @@ const accountTypes = [
 ];
 
 const defaultColors = [
-  '#6366f1', // indigo
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#f43f5e', // rose
-  '#f97316', // orange
-  '#eab308', // yellow
-  '#22c55e', // green
-  '#14b8a6', // teal
-  '#06b6d4', // cyan
-  '#3b82f6', // blue
+  { value: '#6366f1', className: 'bg-[#6366f1]', label: 'Indigo' },
+  { value: '#8b5cf6', className: 'bg-[#8b5cf6]', label: 'Violeta' },
+  { value: '#ec4899', className: 'bg-[#ec4899]', label: 'Rosa' },
+  { value: '#f43f5e', className: 'bg-[#f43f5e]', label: 'Rose' },
+  { value: '#f97316', className: 'bg-[#f97316]', label: 'Laranja' },
+  { value: '#eab308', className: 'bg-[#eab308]', label: 'Amarelo' },
+  { value: '#22c55e', className: 'bg-[#22c55e]', label: 'Verde' },
+  { value: '#14b8a6', className: 'bg-[#14b8a6]', label: 'Teal' },
+  { value: '#06b6d4', className: 'bg-[#06b6d4]', label: 'Ciano' },
+  { value: '#3b82f6', className: 'bg-[#3b82f6]', label: 'Azul' },
 ];
 
 const banks = [
@@ -86,11 +86,11 @@ export default function AccountModal({ isOpen, onClose, account }: AccountModalP
       institution: '',
       currency: 'BRL',
       initialBalance: 0,
-      color: defaultColors[0],
+      color: defaultColors[0].value,
     },
   });
 
-  const selectedColor = watch('color');
+  const selectedColor = watch('color') || defaultColors[0].value;
 
   useEffect(() => {
     if (account) {
@@ -100,7 +100,7 @@ export default function AccountModal({ isOpen, onClose, account }: AccountModalP
         institution: account.institution || '',
         currency: account.currency as AccountFormData['currency'],
         initialBalance: Number(account.initialBalance),
-        color: account.color || defaultColors[0],
+        color: account.color || defaultColors[0].value,
       });
     } else {
       reset({
@@ -109,7 +109,7 @@ export default function AccountModal({ isOpen, onClose, account }: AccountModalP
         institution: '',
         currency: 'BRL',
         initialBalance: 0,
-        color: defaultColors[0],
+        color: defaultColors[0].value,
       });
     }
   }, [account, reset]);
@@ -222,13 +222,14 @@ export default function AccountModal({ isOpen, onClose, account }: AccountModalP
           <div className="flex flex-wrap gap-2">
             {defaultColors.map((color) => (
               <button
-                key={color}
+                key={color.value}
                 type="button"
-                onClick={() => setValue('color', color)}
+                onClick={() => setValue('color', color.value)}
                 className={`h-8 w-8 rounded-full transition-transform ${
-                  selectedColor === color ? 'scale-110 ring-2 ring-offset-2 ring-primary-500' : ''
-                }`}
-                style={{ backgroundColor: color }}
+                  selectedColor === color.value ? 'scale-110 ring-2 ring-offset-2 ring-primary-500' : ''
+                } ${color.className}`}
+                aria-label={`Selecionar cor ${color.label}`}
+                title={color.label}
               />
             ))}
           </div>

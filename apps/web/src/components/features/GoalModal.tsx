@@ -59,6 +59,7 @@ export default function GoalModal({ isOpen, onClose, goal }: GoalModalProps) {
   const selectedColor = watch('color');
   const targetAmount = watch('targetAmount');
   const currentAmount = watch('currentAmount');
+  const selectedColorConfig = goalColors.find((color) => color.value === selectedColor) ?? goalColors[0];
 
   const progress = targetAmount > 0 ? Math.min(100, (currentAmount / targetAmount) * 100) : 0;
 
@@ -146,10 +147,11 @@ export default function GoalModal({ isOpen, onClose, goal }: GoalModalProps) {
                 onClick={() => setValue('color', color.value)}
                 className={clsx(
                   'h-8 w-8 rounded-full transition-all',
+                  color.bgClass,
                   selectedColor === color.value && 'ring-2 ring-offset-2'
                 )}
-                style={{ backgroundColor: color.value }}
                 title={color.label}
+                aria-label={`Selecionar cor ${color.label}`}
               />
             ))}
           </div>
@@ -204,28 +206,25 @@ export default function GoalModal({ isOpen, onClose, goal }: GoalModalProps) {
               {...register('currentAmount', { valueAsNumber: true })}
             />
           </div>
-          {targetAmount > 0 && (
-            <div className="mt-2">
-              <div className="mb-1 flex justify-between text-sm">
-                <span className="text-gray-500">Progresso</span>
-                <span className="font-medium text-gray-900">
-                  {formatCurrency(currentAmount)} de {formatCurrency(targetAmount)}
-                </span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${progress}%`,
-                    backgroundColor: selectedColor || '#3B82F6',
-                  }}
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray-500 text-right">
-                {progress.toFixed(1)}% concluido
-              </p>
-            </div>
-          )}
+              {targetAmount > 0 && (
+                <div className="mt-2">
+                  <div className="mb-1 flex justify-between text-sm">
+                    <span className="text-gray-500">Progresso</span>
+                    <span className="font-medium text-gray-900">
+                      {formatCurrency(currentAmount)} de {formatCurrency(targetAmount)}
+                    </span>
+                  </div>
+                  <progress
+                    value={progress}
+                    max={100}
+                    className={clsx('h-2 w-full rounded-full', selectedColorConfig.accentClass)}
+                    aria-label="Progresso da meta"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 text-right">
+                    {progress.toFixed(1)}% concluido
+                  </p>
+                </div>
+              )}
         </div>
 
         {/* Target Date */}

@@ -189,12 +189,12 @@ export const goalIcons = [
 
 // Goal color options
 export const goalColors = [
-  { value: '#3B82F6', label: 'Azul' },
-  { value: '#10B981', label: 'Verde' },
-  { value: '#F59E0B', label: 'Amarelo' },
-  { value: '#EF4444', label: 'Vermelho' },
-  { value: '#8B5CF6', label: 'Roxo' },
-  { value: '#EC4899', label: 'Rosa' },
-  { value: '#06B6D4', label: 'Ciano' },
-  { value: '#F97316', label: 'Laranja' },
+  { value: '#3B82F6', label: 'Azul', bgClass: 'bg-[#3B82F6]', accentClass: 'accent-[#3B82F6]' },
+  { value: '#10B981', label: 'Verde', bgClass: 'bg-[#10B981]', accentClass: 'accent-[#10B981]' },
+  { value: '#F59E0B', label: 'Amarelo', bgClass: 'bg-[#F59E0B]', accentClass: 'accent-[#F59E0B]' },
+  { value: '#EF4444', label: 'Vermelho', bgClass: 'bg-[#EF4444]', accentClass: 'accent-[#EF4444]' },
+  { value: '#8B5CF6', label: 'Roxo', bgClass: 'bg-[#8B5CF6]', accentClass: 'accent-[#8B5CF6]' },
+  { value: '#EC4899', label: 'Rosa', bgClass: 'bg-[#EC4899]', accentClass: 'accent-[#EC4899]' },
+  { value: '#06B6D4', label: 'Ciano', bgClass: 'bg-[#06B6D4]', accentClass: 'accent-[#06B6D4]' },
+  { value: '#F97316', label: 'Laranja', bgClass: 'bg-[#F97316]', accentClass: 'accent-[#F97316]' },
 ];

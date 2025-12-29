@@ -226,17 +226,12 @@ export default function InvestmentsPage() {
                       {formatCurrency(item.value)} ({item.percentage}%)
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                    <div
-                      className={clsx('h-full rounded-full', config.bgColor)}
-                      style={{
-                        width: `${item.percentage}%`,
-                        backgroundColor: config.color.replace('text-', '').includes('-')
-                          ? undefined
-                          : undefined,
-                      }}
-                    />
-                  </div>
+                  <progress
+                    value={item.percentage}
+                    max={100}
+                    className={clsx('h-2 w-full rounded-full bg-gray-100', config.accentClass)}
+                    aria-label={`Alocacao ${config.label}`}
+                  />
                 </div>
               );
             })}

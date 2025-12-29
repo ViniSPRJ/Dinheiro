@@ -212,16 +212,16 @@ export function useDeleteInvestment() {
 // Helper to get investment type label and color
 export const investmentTypeConfig: Record<
   InvestmentType,
-  { label: string; color: string; bgColor: string }
+  { label: string; color: string; bgColor: string; accentClass: string }
 > = {
-  STOCK: { label: 'Acoes', color: 'text-blue-600', bgColor: 'bg-blue-50' },
-  FII: { label: 'FIIs', color: 'text-purple-600', bgColor: 'bg-purple-50' },
-  CRYPTO: { label: 'Crypto', color: 'text-orange-600', bgColor: 'bg-orange-50' },
-  TESOURO_DIRETO: { label: 'Tesouro Direto', color: 'text-green-600', bgColor: 'bg-green-50' },
-  CDB: { label: 'CDB', color: 'text-teal-600', bgColor: 'bg-teal-50' },
-  LCI: { label: 'LCI', color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
-  LCA: { label: 'LCA', color: 'text-emerald-600', bgColor: 'bg-emerald-50' },
-  FUND: { label: 'Fundos', color: 'text-indigo-600', bgColor: 'bg-indigo-50' },
-  PROPERTY: { label: 'Imoveis', color: 'text-amber-600', bgColor: 'bg-amber-50' },
-  OTHER: { label: 'Outros', color: 'text-gray-600', bgColor: 'bg-gray-50' },
+  STOCK: { label: 'Acoes', color: 'text-blue-600', bgColor: 'bg-blue-50', accentClass: 'accent-blue-500' },
+  FII: { label: 'FIIs', color: 'text-purple-600', bgColor: 'bg-purple-50', accentClass: 'accent-purple-500' },
+  CRYPTO: { label: 'Crypto', color: 'text-orange-600', bgColor: 'bg-orange-50', accentClass: 'accent-orange-500' },
+  TESOURO_DIRETO: { label: 'Tesouro Direto', color: 'text-green-600', bgColor: 'bg-green-50', accentClass: 'accent-green-500' },
+  CDB: { label: 'CDB', color: 'text-teal-600', bgColor: 'bg-teal-50', accentClass: 'accent-teal-500' },
+  LCI: { label: 'LCI', color: 'text-cyan-600', bgColor: 'bg-cyan-50', accentClass: 'accent-cyan-500' },
+  LCA: { label: 'LCA', color: 'text-emerald-600', bgColor: 'bg-emerald-50', accentClass: 'accent-emerald-500' },
+  FUND: { label: 'Fundos', color: 'text-indigo-600', bgColor: 'bg-indigo-50', accentClass: 'accent-indigo-500' },
+  PROPERTY: { label: 'Imoveis', color: 'text-amber-600', bgColor: 'bg-amber-50', accentClass: 'accent-amber-500' },
+  OTHER: { label: 'Outros', color: 'text-gray-600', bgColor: 'bg-gray-50', accentClass: 'accent-gray-500' },
 };
