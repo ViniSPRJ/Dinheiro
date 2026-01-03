@@ -107,6 +107,39 @@ async def get_model_status(user_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class ItemExtractionRequest(BaseModel):
+    description: str
+
+class ItemExtractionResponse(BaseModel):
+    item: Optional[str]
+    type: Optional[str]
+    confidence: float
+    source: str
+
+@app.post("/ml/extract-entities", response_model=ItemExtractionResponse)
+async def extract_entities(request: ItemExtractionRequest):
+    """
+    Extract consumption entities from transaction description.
+    Uses Semantic NLP to identify canonical items (e.g. "Gasolina", "Streaming").
+    """
+    try:
+        result = categorizer.extract_entities(request.description)
+        if not result:
+            return ItemExtractionResponse(
+                 item=None,
+                 type=None,
+                 confidence=0.0,
+                 source="none"
+            )
+            
+        return ItemExtractionResponse(
+            item=result.get("item"),
+            type=result.get("type"),
+            confidence=result.get("confidence", 0.0),
+            source=result.get("source", "rule_based")
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

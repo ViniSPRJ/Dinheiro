@@ -23,6 +23,7 @@ import tagRoutes from './routes/tag.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import mlRoutes from './routes/ml.routes.js';
+import wealthRoutes from './routes/wealth.routes.js';
 
 const app = express();
 

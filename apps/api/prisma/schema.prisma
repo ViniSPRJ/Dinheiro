@@ -54,6 +54,10 @@ model User {
   customRules    CustomRule[]
   netWorthSnapshots NetWorthSnapshot[]
 
+  // Wealth Intelligence
+  personalBasketItems PersonalBasketItem[]
+  inflationSnapshots  UserInflationSnapshot[]
+
   @@index([email])
 }
 
@@ -206,6 +210,7 @@ model Category {
   goals        Goal[]
   subscriptions Subscription[]
   recurringRules RecurringRule[]
+  personalBasketItems PersonalBasketItem[]
 
   @@unique([userId, name])
   @@index([userId, type])
@@ -582,4 +587,48 @@ model RefreshToken {
 
   @@index([userId])
   @@index([token])
+}
+
+// ============ PERSONAL INFLATION & WEALTH INTELLIGENCE ============
+
+// Índices Oficiais (IPCA, IGPM, etc por categoria)
+model MarketIndex {
+  id        String   @id @default(cuid())
+  name      String   // Ex: "IPCA-Alimentação", "IPCA-Transporte"
+  value     Decimal  @db.Decimal(5, 2)
+  date      DateTime @db.Date
+  source    String   @default("IBGE")
+  createdAt DateTime @default(now())
+
+  @@index([name, date])
+}
+
+// Cesta de Consumo Personalizada (Premium)
+model PersonalBasketItem {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemName      String   // Ex: "Gasolina", "Netflix"
+  searchTerm    String?  // Termo para busca automática
+  categoryId    String
+  category      Category @relation(fields: [categoryId], references: [id])
+  
+  basePrice     Decimal  @db.Decimal(15, 2)
+  currentPrice  Decimal  @db.Decimal(15, 2)
+  lastUpdated   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Snapshots de Inflação do Usuário
+model UserInflationSnapshot {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalInflation Decimal  @db.Decimal(5, 2) // O PPI (Personal Price Index)
+  officialBenchmark Decimal  @db.Decimal(5, 2) // IPCA Geral para comparação
+  date              DateTime @db.Date
+  createdAt         DateTime @default(now())
+  
+  @@index([userId, date])
 }

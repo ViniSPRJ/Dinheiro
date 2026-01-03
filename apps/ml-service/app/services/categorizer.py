@@ -8,9 +8,10 @@ from sklearn.pipeline import Pipeline
 import joblib
 import redis
 from pathlib import Path
-
+import spacy
 
 class CategorySuggestionService:
+
     """
     ML service for suggesting transaction categories.
     Uses TF-IDF + Naive Bayes for text classification.
@@ -146,6 +147,19 @@ class CategorySuggestionService:
 
         # Global model trained on default categories
         self.global_model = self._build_global_model()
+
+        # Load Spacy (Level 2 NLP)
+        try:
+            self.nlp = spacy.load("pt_core_news_sm")
+        except OSError:
+            print("Downloading Spacy model...")
+            from spacy.cli import download
+            download("pt_core_news_sm")
+            self.nlp = spacy.load("pt_core_news_sm")
+
+        # Initialize Wealth Intelligence Service (Level 3 NLP - Semantic)
+        from app.services.wealth_intelligence import WealthIntelligenceService
+        self.wealth_service = WealthIntelligenceService()
 
     def _build_global_model(self) -> Pipeline:
         """Build the global model from default categories"""
@@ -369,6 +383,81 @@ class CategorySuggestionService:
             # Retrain if we have enough data
             if len(data) >= 5:
                 self._train_user_model(user_id, data)
+
+
+
+    def extract_entities(self, description: str) -> Dict[str, str]:
+        """
+        Extract detailed entities from transaction description.
+        Returns a dict with 'item' and 'type'.
+        Ex: "POSTO SHELL" -> {"item": "Gasolina", "type": "FUEL"}
+        """
+        # 1. Level 3: Semantic Extraction (Wealth Intelligence)
+        try:
+            wealth_result = self.wealth_service.extract_consumption_item(description)
+            if wealth_result.get("identified_item"):
+                return {
+                    "item": wealth_result["identified_item"],
+                    "type": "CONSUMPTION_ITEM",
+                    "confidence": wealth_result.get("confidence", 0.0),
+                    "source": "semantic_embedding"
+                }
+        except Exception as e:
+            print(f"Wealth Intelligence extraction failed: {e}")
+
+        # 2. Normalize
+        normalized = self._normalize_text(description)
+        
+        # 3. Spacy NER (Level 2)
+        doc = self.nlp(description) 
+        
+        # Prioritize Spacy Entities
+        for ent in doc.ents:
+            if ent.label_ == "ORG":
+                if "SHELL" in ent.text.upper():
+                     return {"item": "Gasolina", "type": "FUEL"}
+                if "UBER" in ent.text.upper():
+                     return {"item": "Uber", "type": "TRANSPORT"}
+            if ent.label_ == "MISC":
+                 pass
+
+        # 4. Fallback to Regex (Level 1)
+        entity = self._extract_entities_regex(normalized)
+        
+        return entity
+
+    def _extract_entities_regex(self, text: str) -> Dict[str, str]:
+        """
+        Rule-based entity extraction.
+        """
+        # Gas / Fuel
+        fuel_terms = ["posto", "shell", "ipiranga", "petrobras", "br", "gasolina", "etanol", "abastecimento"]
+        if any(t in text for t in fuel_terms):
+            return {"item": "Gasolina", "type": "FUEL"}
+
+        # Streaming / Subs
+        if "netflix" in text:
+            return {"item": "Netflix", "type": "SUBSCRIPTION"}
+        if "spotify" in text:
+            return {"item": "Spotify", "type": "SUBSCRIPTION"}
+        if "prime" in text and "amazon" in text:
+            return {"item": "Amazon Prime", "type": "SUBSCRIPTION"}
+            
+        # Food / Groceries
+        if "ifood" in text:
+             return {"item": "Delivery", "type": "FOOD"}
+        
+        if any(m in text for m in ["carrefour", "pao de acucar", "extra", "mercado", "supermercado"]):
+            return {"item": "Cesta Básica", "type": "GROCERY"}
+
+        # Rideshare
+        if "uber" in text:
+             # Distinguish eats from rides if possible, otherwise generic
+             if "eats" in text:
+                 return {"item": "Delivery", "type": "FOOD"}
+             return {"item": "Uber", "type": "TRANSPORT"}
+
+        return {}
 
     def get_model_status(self, user_id: str) -> Dict:
         """Get status of a user's model"""

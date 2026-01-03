@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m spacy download pt_core_news_sm
 
 # Copy application code
 COPY . .

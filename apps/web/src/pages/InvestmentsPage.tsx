@@ -22,7 +22,9 @@ import {
   investmentTypeConfig,
 } from '../hooks/useInvestments';
 import InvestmentModal from '../components/features/InvestmentModal';
+import WealthHealthCard from '../components/features/WealthHealthCard';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { useWealthHealth } from '../hooks/useWealth';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -46,6 +48,7 @@ export default function InvestmentsPage() {
   );
   const { data: performanceData } = useInvestmentPerformance();
   const { data: allocationData } = useInvestmentAllocation();
+  const { data: wealthData, isLoading: isWealthLoading } = useWealthHealth();
   const deleteInvestment = useDeleteInvestment();
 
   const handleEdit = (investment: Investment) => {
@@ -108,6 +111,9 @@ export default function InvestmentsPage() {
           Novo investimento
         </button>
       </div>
+
+      {/* Wealth Health Card */}
+      <WealthHealthCard data={wealthData || null} isLoading={isWealthLoading} />
 
       {/* Summary Cards */}
       {performanceData && (
