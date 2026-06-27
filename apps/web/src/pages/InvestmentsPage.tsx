@@ -23,6 +23,7 @@ import {
 } from '../hooks/useInvestments';
 import InvestmentModal from '../components/features/InvestmentModal';
 import WealthHealthCard from '../components/features/WealthHealthCard';
+import PortfolioAdvisorCard from '../components/features/PortfolioAdvisorCard';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useWealthHealth } from '../hooks/useWealth';
 
@@ -114,6 +115,9 @@ export default function InvestmentsPage() {
 
       {/* Wealth Health Card */}
       <WealthHealthCard data={wealthData || null} isLoading={isWealthLoading} />
+
+      {/* OpenSwarm Portfolio Advisor */}
+      <PortfolioAdvisorCard />
 
       {/* Summary Cards */}
       {performanceData && (

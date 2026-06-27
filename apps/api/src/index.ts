@@ -24,6 +24,7 @@ import notificationRoutes from './routes/notification.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import mlRoutes from './routes/ml.routes.js';
 import wealthRoutes from './routes/wealth.routes.js';
+import advisorRoutes from './routes/advisor.routes.js';
 
 const app = express();
 
@@ -77,6 +78,7 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ml', mlRoutes);
+app.use('/api/advisor', advisorRoutes);
 
 // Error handling
 app.use(notFoundHandler);
