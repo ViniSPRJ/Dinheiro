@@ -78,6 +78,7 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/ml', mlRoutes);
+app.use('/api/wealth', wealthRoutes);
 app.use('/api/advisor', advisorRoutes);
 
 // Error handling
