@@ -32,7 +32,11 @@ const querySchema = z.object({
   status: z.enum(['PENDING', 'CONFIRMED', 'RECONCILED']).optional(),
 });
 
-type BalanceContext = Pick<Transaction, 'type' | 'amount' | 'accountId' | 'transferFromId' | 'transferToId'>;
+type BalanceContext = Pick<Transaction, 'type' | 'accountId' | 'transferFromId' | 'transferToId'> & {
+  // Accept a plain number (update path) or a Prisma Decimal (existing records);
+  // both helpers coerce via Number(context.amount).
+  amount: Prisma.Decimal | number;
+};
 
 const applyBalanceEffect = async (
   tx: Prisma.TransactionClient,

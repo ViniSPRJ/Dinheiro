@@ -31,6 +31,9 @@ const envSchema = z.object({
   // ML Service
   ML_SERVICE_URL: z.string().default('http://localhost:8000'),
 
+  // OpenSwarm Advisor Service (portfolio review & allocation optimization)
+  ADVISOR_SERVICE_URL: z.string().default('http://localhost:8001'),
+
   // External APIs
   COINGECKO_API_KEY: z.string().optional(),
   BRAPI_API_KEY: z.string().optional(),
@@ -76,6 +79,9 @@ export const config = {
 
   // ML Service
   mlServiceUrl: env.ML_SERVICE_URL,
+
+  // OpenSwarm Advisor Service
+  advisorServiceUrl: env.ADVISOR_SERVICE_URL,
 
   // External APIs
   externalApis: {

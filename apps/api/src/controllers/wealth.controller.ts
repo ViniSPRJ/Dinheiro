@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { WealthService } from '../services/wealth.service.ts';
+import { WealthService } from '../services/wealth.service.js';
 
 export class WealthController {
   
