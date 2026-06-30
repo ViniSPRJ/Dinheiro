@@ -1,7 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import { Investment } from "@prisma/client";
 import { prisma } from "../utils/prisma.js";
 import { NotFoundError } from "../middleware/errorHandler.js";
+import { quotesService } from "../services/quotesService.js";
+import { recomputeInvestmentFromLots } from "../services/lotService.js";
+import { regenerateCapitalGainEvents } from "../services/taxEngine.js";
+
+const QUOTABLE_TYPES = ["STOCK", "FII", "CRYPTO"];
+
+const addLotSchema = z.object({
+  side: z.enum(["BUY", "SELL"]),
+  quantity: z.number().positive(),
+  unitPrice: z.number().positive(),
+  fees: z.number().min(0).optional(),
+  tradeDate: z.string().transform((str) => new Date(str)),
+  notes: z.string().optional(),
+});
 
 const createInvestmentSchema = z.object({
   type: z.enum([
@@ -81,6 +96,17 @@ export class InvestmentController {
         data: {
           userId,
           ...data,
+          // Seed the lot ledger with the position entered at creation time, so
+          // later addLot/deleteLot recomputes start from a consistent history
+          // instead of zeroing out a position that predates lot tracking.
+          lots: {
+            create: {
+              side: "BUY",
+              quantity: data.quantity ?? 1,
+              unitPrice: data.averagePrice,
+              tradeDate: data.acquisitionDate,
+            },
+          },
         },
         include: {
           account: { select: { id: true, name: true } },
@@ -199,27 +225,25 @@ export class InvestmentController {
       where: { userId, deletedAt: null },
     });
 
-    // TODO: Fetch current prices from external APIs
-    // For now, return calculated values based on stored data
-    const performance = investments.map((inv) => {
-      const currentValue = inv.estimatedValue
-        ? Number(inv.estimatedValue)
-        : Number(inv.quantity || 1) * Number(inv.averagePrice);
-      const invested = Number(inv.totalInvested);
-      const profit = currentValue - invested;
-      const profitPercent = invested > 0 ? (profit / invested) * 100 : 0;
+    const performance = await Promise.all(
+      investments.map(async (inv) => {
+        const currentValue = await InvestmentController.resolveCurrentValue(inv);
+        const invested = Number(inv.totalInvested);
+        const profit = currentValue - invested;
+        const profitPercent = invested > 0 ? (profit / invested) * 100 : 0;
 
-      return {
-        id: inv.id,
-        name: inv.name,
-        ticker: inv.ticker,
-        type: inv.type,
-        invested,
-        currentValue,
-        profit,
-        profitPercent: Math.round(profitPercent * 100) / 100,
-      };
-    });
+        return {
+          id: inv.id,
+          name: inv.name,
+          ticker: inv.ticker,
+          type: inv.type,
+          invested,
+          currentValue,
+          profit,
+          profitPercent: Math.round(profitPercent * 100) / 100,
+        };
+      })
+    );
 
     const totals = {
       totalInvested: performance.reduce((sum, p) => sum + p.invested, 0),
@@ -237,6 +261,24 @@ export class InvestmentController {
         : 0;
 
     return { performance, totals };
+  }
+
+  /**
+   * Resolves a position's current market value, falling back gracefully when a
+   * live quote isn't available: live quote -> last cached quote (quoteRefreshJob)
+   * -> manually entered estimatedValue -> quantity * averagePrice.
+   */
+  private static async resolveCurrentValue(inv: Investment): Promise<number> {
+    const quantity = Number(inv.quantity || 1);
+
+    if (inv.ticker && QUOTABLE_TYPES.includes(inv.type)) {
+      const quote = await quotesService.getQuote(inv.ticker, inv.type);
+      if (quote) return quote.price * quantity;
+      if (inv.currentPrice) return Number(inv.currentPrice) * quantity;
+    }
+
+    if (inv.estimatedValue) return Number(inv.estimatedValue);
+    return quantity * Number(inv.averagePrice);
   }
 
   static async getAllocation(req: Request, res: Response, next: NextFunction) {
@@ -284,6 +326,88 @@ export class InvestmentController {
         status: "success",
         data: { allocation, totalValue },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async addLot(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.userId!;
+      const { id } = req.params;
+      const data = addLotSchema.parse(req.body);
+
+      const investment = await prisma.investment.findFirst({
+        where: { id, userId, deletedAt: null },
+      });
+      if (!investment) {
+        throw new NotFoundError("Investment not found");
+      }
+
+      const lot = await prisma.investmentLot.create({
+        data: { investmentId: id, ...data, fees: data.fees ?? 0 },
+      });
+
+      await recomputeInvestmentFromLots(id);
+      await regenerateCapitalGainEvents(id);
+      const updated = await prisma.investment.findUnique({ where: { id } });
+
+      res.status(201).json({
+        status: "success",
+        data: { lot, investment: updated },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getLots(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.userId!;
+      const { id } = req.params;
+
+      const investment = await prisma.investment.findFirst({
+        where: { id, userId, deletedAt: null },
+      });
+      if (!investment) {
+        throw new NotFoundError("Investment not found");
+      }
+
+      const lots = await prisma.investmentLot.findMany({
+        where: { investmentId: id },
+        orderBy: { tradeDate: "desc" },
+      });
+
+      res.json({ status: "success", data: { lots } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteLot(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.userId!;
+      const { id, lotId } = req.params;
+
+      const investment = await prisma.investment.findFirst({
+        where: { id, userId, deletedAt: null },
+      });
+      if (!investment) {
+        throw new NotFoundError("Investment not found");
+      }
+
+      const lot = await prisma.investmentLot.findFirst({
+        where: { id: lotId, investmentId: id },
+      });
+      if (!lot) {
+        throw new NotFoundError("Lot not found");
+      }
+
+      await prisma.investmentLot.delete({ where: { id: lotId } });
+      await recomputeInvestmentFromLots(id);
+      await regenerateCapitalGainEvents(id);
+
+      res.json({ status: "success", message: "Lot deleted successfully" });
     } catch (error) {
       next(error);
     }

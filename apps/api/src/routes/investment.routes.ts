@@ -15,4 +15,8 @@ router.get('/:id', InvestmentController.getById);
 router.patch('/:id', InvestmentController.update);
 router.delete('/:id', InvestmentController.delete);
 
+router.post('/:id/lots', InvestmentController.addLot);
+router.get('/:id/lots', InvestmentController.getLots);
+router.delete('/:id/lots/:lotId', InvestmentController.deleteLot);
+
 export default router;

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 
 from app.services.categorizer import CategorySuggestionService
+from app.services.receipt_parser import extract_text, parse_receipt_fields
 
 load_dotenv()
 
@@ -140,6 +141,48 @@ async def extract_entities(request: ItemExtractionRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+class ReceiptExtractionResponse(BaseModel):
+    amount: Optional[float]
+    date: Optional[str]
+    merchant: Optional[str]
+    raw_text: str
+    category_suggestion: Optional[dict]
+
+
+@app.post("/ml/extract-from-receipt", response_model=ReceiptExtractionResponse)
+async def extract_from_receipt(user_id: str = Form(...), file: UploadFile = File(...)):
+    """
+    OCRs a receipt photo/PDF, extracts amount/date/merchant, and reuses the
+    existing categorizer to suggest a transaction category from the merchant
+    text -- the same suggest_category() path text-entered transactions use.
+    """
+    try:
+        file_bytes = await file.read()
+        raw_text = extract_text(file_bytes, file.content_type or "")
+        fields = parse_receipt_fields(raw_text)
+
+        category_suggestion = None
+        if fields["merchant"]:
+            try:
+                category_suggestion = categorizer.suggest_category(
+                    description=fields["merchant"],
+                    user_id=user_id,
+                    amount=fields["amount"],
+                )
+            except Exception:
+                category_suggestion = None
+
+        return ReceiptExtractionResponse(
+            amount=fields["amount"],
+            date=fields["date"],
+            merchant=fields["merchant"],
+            raw_text=raw_text,
+            category_suggestion=category_suggestion,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

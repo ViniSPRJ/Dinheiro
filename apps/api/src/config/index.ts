@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.string().default('3000'),
 
   // Database
@@ -37,6 +37,10 @@ const envSchema = z.object({
   // External APIs
   COINGECKO_API_KEY: z.string().optional(),
   BRAPI_API_KEY: z.string().optional(),
+
+  // Quotes (live market price) caching/timeouts
+  QUOTES_CACHE_TTL: z.string().default('60'), // seconds
+  QUOTES_REQUEST_TIMEOUT: z.string().default('5000'), // ms
 });
 
 const env = envSchema.parse(process.env);
@@ -87,6 +91,12 @@ export const config = {
   externalApis: {
     coingeckoApiKey: env.COINGECKO_API_KEY,
     brapiApiKey: env.BRAPI_API_KEY,
+  },
+
+  // Quotes
+  quotes: {
+    cacheTtlSeconds: parseInt(env.QUOTES_CACHE_TTL, 10),
+    requestTimeoutMs: parseInt(env.QUOTES_REQUEST_TIMEOUT, 10),
   },
 
   // Rate limits

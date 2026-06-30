@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../utils/prisma.js';
 import { NotFoundError, BadRequestError } from '../middleware/errorHandler.js';
 import { Prisma, Transaction } from '@prisma/client';
+import { receiptService } from '../services/receiptService.js';
 
 const createTransactionSchema = z.object({
   type: z.enum(['EXPENSE', 'INCOME', 'TRANSFER']),
@@ -502,5 +503,34 @@ export class TransactionController {
       status: 'error',
       message: 'Import not yet implemented',
     });
+  }
+
+  static async extractReceipt(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.userId!;
+      const file = req.file;
+      if (!file) {
+        throw new BadRequestError('No file uploaded');
+      }
+
+      const extraction = await receiptService.extractFromReceipt(
+        userId,
+        file.buffer,
+        file.mimetype,
+        file.originalname
+      );
+
+      if (!extraction) {
+        res.json({
+          status: 'success',
+          data: { available: false, message: 'Servico de OCR indisponivel no momento.' },
+        });
+        return;
+      }
+
+      res.json({ status: 'success', data: { available: true, ...extraction } });
+    } catch (error) {
+      next(error);
+    }
   }
 }

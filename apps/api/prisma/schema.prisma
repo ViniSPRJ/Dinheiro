@@ -61,6 +61,9 @@ model User {
   personalBasketItems PersonalBasketItem[]
   inflationSnapshots  UserInflationSnapshot[]
 
+  // Risk / benchmark
+  portfolioSnapshots PortfolioSnapshot[]
+
   @@index([email])
 }
 
@@ -291,6 +294,10 @@ model Investment {
   address        String?
   estimatedValue Decimal? @db.Decimal(15, 2)
 
+  // Live quote (cached, refreshed by quoteRefreshJob)
+  currentPrice   Decimal?  @db.Decimal(15, 4)
+  priceUpdatedAt DateTime?
+
   // Notes
   notes String?
 
@@ -300,7 +307,100 @@ model Investment {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
+  // Relations
+  lots              InvestmentLot[]
+  dividends         Dividend[]
+  capitalGainEvents CapitalGainEvent[]
+
   @@index([userId, type])
+}
+
+model Dividend {
+  id           String     @id @default(cuid())
+  investmentId String
+  investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  type           DividendType
+  amountPerShare Decimal   @db.Decimal(15, 6)
+  totalAmount    Decimal   @db.Decimal(15, 2)
+  paymentDate    DateTime  @db.Date
+  exDate         DateTime? @db.Date
+  withholdingTax Decimal   @default(0) @db.Decimal(15, 2) // IRRF retido na fonte (15% em JCP)
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([investmentId, paymentDate])
+}
+
+enum DividendType {
+  DIVIDENDO
+  JCP
+  RENDIMENTO
+}
+
+// quantity/averagePrice/totalInvested on Investment are derived from these lots
+// via lotService.recomputeInvestmentFromLots — lots are the source of truth.
+model InvestmentLot {
+  id           String     @id @default(cuid())
+  investmentId String
+  investment   Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  side       LotSide
+  quantity   Decimal  @db.Decimal(20, 8)
+  unitPrice  Decimal  @db.Decimal(15, 4)
+  fees       Decimal  @default(0) @db.Decimal(15, 2)
+  tradeDate  DateTime @db.Date
+  notes      String?
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  capitalGainEvents CapitalGainEvent[]
+
+  @@index([investmentId, tradeDate])
+}
+
+enum LotSide {
+  BUY
+  SELL
+}
+
+// Generated (not user-entered) from SELL lots via taxEngine.regenerateCapitalGainEvents
+// whenever an investment's lots change. gain/saleValue/assetClass/month are the
+// source of truth; exemptUnder20k/taxDue are a best-effort cache from the last
+// regeneration — the monthly exemption depends on the SUM of sales across ALL of
+// a user's investments in that asset class, so /api/tax/summary and /api/tax/darf
+// always recompute fresh from the raw fields rather than trusting this cache.
+model CapitalGainEvent {
+  id           String         @id @default(cuid())
+  investmentId String
+  investment   Investment     @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+  lotId        String?
+  lot          InvestmentLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
+
+  saleDate       DateTime   @db.Date
+  quantity       Decimal    @db.Decimal(20, 8)
+  saleValue      Decimal    @db.Decimal(15, 2)
+  costBasis      Decimal    @db.Decimal(15, 2)
+  gain           Decimal    @db.Decimal(15, 2)
+  assetClass     AssetClass
+  exemptUnder20k Boolean    @default(false)
+  taxDue         Decimal    @default(0) @db.Decimal(15, 2)
+  month          String // "2026-06", for monthly exemption aggregation
+
+  createdAt DateTime @default(now())
+
+  @@index([investmentId, saleDate])
+  @@index([month, assetClass])
+}
+
+enum AssetClass {
+  ACOES
+  FII
+  CRIPTO
+  OUTROS
 }
 
 enum InvestmentType {
@@ -595,15 +695,35 @@ model RefreshToken {
 // ============ PERSONAL INFLATION & WEALTH INTELLIGENCE ============
 
 // Índices Oficiais (IPCA, IGPM, etc por categoria)
+// `value` is always a period return in % (CDI: daily, IPCA: monthly, IBOV:
+// daily — computed from the raw quote level by indexSyncJob), never a raw
+// index level, so every row is comparable/compoundable the same way for
+// benchmark comparison regardless of source.
 model MarketIndex {
   id        String   @id @default(cuid())
-  name      String   // Ex: "IPCA-Alimentação", "IPCA-Transporte"
+  name      String   // Ex: "IPCA-Alimentação", "IPCA-Transporte", "CDI", "IBOV"
   value     Decimal  @db.Decimal(5, 2)
   date      DateTime @db.Date
   source    String   @default("IBGE")
   createdAt DateTime @default(now())
 
   @@index([name, date])
+}
+
+// Daily snapshot of a user's total investment portfolio value, used to derive
+// a return series for volatility/Sharpe/correlation (riskEngine.ts).
+model PortfolioSnapshot {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date       DateTime @db.Date
+  totalValue Decimal  @db.Decimal(15, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
 }
 
 // Cesta de Consumo Personalizada (Premium)

@@ -5,11 +5,23 @@ import { z } from 'zod';
 import { Tab } from '@headlessui/react';
 import { format } from 'date-fns';
 import Modal from '../ui/Modal';
-import { Transaction, useCreateTransaction, useUpdateTransaction } from '../../hooks/useTransactions';
+import {
+  Transaction,
+  useCreateTransaction,
+  useUpdateTransaction,
+  useExtractReceipt,
+} from '../../hooks/useTransactions';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useCategories } from '../../hooks/useCategories';
 import { useCategorySuggestion } from '../../hooks/useCategorySuggestion';
-import { ArrowDownIcon, ArrowUpIcon, ArrowsRightLeftIcon, SparklesIcon, CheckIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ArrowsRightLeftIcon,
+  SparklesIcon,
+  CheckIcon,
+  DocumentArrowUpIcon,
+} from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 
 const transactionSchema = z.object({
@@ -52,6 +64,7 @@ export default function TransactionModal({
   const { data: expenseCategories } = useCategories('EXPENSE');
   const { data: incomeCategories } = useCategories('INCOME');
   const { suggestion, isLoading: isSuggesting, suggest, clearSuggestion } = useCategorySuggestion();
+  const extractReceipt = useExtractReceipt();
 
   const isEditing = !!transaction;
   const [selectedTabIndex, setSelectedTabIndex] = useState(
@@ -164,6 +177,23 @@ export default function TransactionModal({
     }
   };
 
+  const handleReceiptUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const extraction = await extractReceipt.mutateAsync(file).catch(() => null);
+    if (!extraction || !extraction.available) return;
+
+    if (extraction.amount) setValue('amount', extraction.amount);
+    if (extraction.date) setValue('date', extraction.date);
+    // Setting description re-triggers the existing AI category suggestion
+    // effect above, so the OCR-derived merchant flows through the same
+    // confidence-badge UI text entry already uses -- no separate suggestion
+    // path needed for the OCR case.
+    if (extraction.merchant) setValue('description', extraction.merchant);
+  };
+
   const onSubmit = async (data: TransactionFormData) => {
     try {
       if (isEditing && transaction) {
@@ -207,6 +237,23 @@ export default function TransactionModal({
               ))}
             </Tab.List>
           </Tab.Group>
+        )}
+
+        {/* Receipt OCR import */}
+        {!isEditing && (
+          <div>
+            <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 text-sm">
+              <DocumentArrowUpIcon className="h-4 w-4" />
+              {extractReceipt.isPending ? 'Lendo recibo...' : 'Importar recibo (foto ou PDF)'}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={handleReceiptUpload}
+                disabled={extractReceipt.isPending}
+              />
+            </label>
+          </div>
         )}
 
         {/* Amount */}

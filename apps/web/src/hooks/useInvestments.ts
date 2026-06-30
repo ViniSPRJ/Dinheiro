@@ -23,6 +23,7 @@ export interface Investment {
   averagePrice: number;
   totalInvested: number;
   currentPrice: number | null;
+  priceUpdatedAt: string | null;
   estimatedValue: number | null;
   institution: string | null;
   interestRate: number | null;
@@ -33,6 +34,29 @@ export interface Investment {
   accountId: string | null;
   account: { id: string; name: string } | null;
   createdAt: string;
+}
+
+export type LotSide = 'BUY' | 'SELL';
+
+export interface InvestmentLot {
+  id: string;
+  investmentId: string;
+  side: LotSide;
+  quantity: number;
+  unitPrice: number;
+  fees: number;
+  tradeDate: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface AddLotData {
+  side: LotSide;
+  quantity: number;
+  unitPrice: number;
+  fees?: number;
+  tradeDate: string;
+  notes?: string;
 }
 
 interface InvestmentsResponse {
@@ -205,6 +229,61 @@ export function useDeleteInvestment() {
     },
     onError: () => {
       toast.error('Erro ao remover investimento');
+    },
+  });
+}
+
+export function useInvestmentLots(investmentId: string) {
+  return useQuery({
+    queryKey: ['investments', investmentId, 'lots'],
+    queryFn: async () => {
+      const response = await api.get<{ data: { lots: InvestmentLot[] } }>(
+        `/investments/${investmentId}/lots`
+      );
+      return response.data.data.lots;
+    },
+    enabled: !!investmentId,
+  });
+}
+
+export function useAddLot(investmentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: AddLotData) => {
+      const response = await api.post<{ data: { lot: InvestmentLot } }>(
+        `/investments/${investmentId}/lots`,
+        data
+      );
+      return response.data.data.lot;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['investments', investmentId, 'lots'] });
+      queryClient.invalidateQueries({ queryKey: ['investments'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Operacao lancada!');
+    },
+    onError: () => {
+      toast.error('Erro ao lancar operacao');
+    },
+  });
+}
+
+export function useDeleteLot(investmentId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (lotId: string) => {
+      await api.delete(`/investments/${investmentId}/lots/${lotId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['investments', investmentId, 'lots'] });
+      queryClient.invalidateQueries({ queryKey: ['investments'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Operacao removida!');
+    },
+    onError: () => {
+      toast.error('Erro ao remover operacao');
     },
   });
 }

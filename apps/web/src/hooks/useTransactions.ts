@@ -118,6 +118,37 @@ export function useCreateTransaction() {
   });
 }
 
+export interface ReceiptExtraction {
+  available: boolean;
+  message?: string;
+  amount: number | null;
+  date: string | null;
+  merchant: string | null;
+  category_suggestion?: {
+    category_id: string;
+    category_name: string;
+    confidence: number;
+  } | null;
+}
+
+export function useExtractReceipt() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await api.post<{ data: ReceiptExtraction }>(
+        '/transactions/extract-receipt',
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data.data;
+    },
+    onError: () => {
+      toast.error('Nao foi possivel ler o recibo');
+    },
+  });
+}
+
 export function useUpdateTransaction() {
   const queryClient = useQueryClient();
 

@@ -24,6 +24,10 @@ import {
 import InvestmentModal from '../components/features/InvestmentModal';
 import WealthHealthCard from '../components/features/WealthHealthCard';
 import PortfolioAdvisorCard from '../components/features/PortfolioAdvisorCard';
+import DividendsCard from '../components/features/DividendsCard';
+import RiskMetricsCard from '../components/features/RiskMetricsCard';
+import BenchmarkComparisonCard from '../components/features/BenchmarkComparisonCard';
+import CapitalGainsCard from '../components/features/CapitalGainsCard';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useWealthHealth } from '../hooks/useWealth';
 
@@ -118,6 +122,18 @@ export default function InvestmentsPage() {
 
       {/* OpenSwarm Portfolio Advisor */}
       <PortfolioAdvisorCard />
+
+      {/* Dividends / Proventos */}
+      <DividendsCard />
+
+      {/* Risk metrics + benchmark comparison */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RiskMetricsCard />
+        <BenchmarkComparisonCard />
+      </div>
+
+      {/* Capital gains / IR */}
+      <CapitalGainsCard />
 
       {/* Summary Cards */}
       {performanceData && (

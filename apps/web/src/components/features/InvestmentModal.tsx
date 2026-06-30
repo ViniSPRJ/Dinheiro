@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,10 +9,119 @@ import {
   InvestmentType,
   useCreateInvestment,
   useUpdateInvestment,
+  useInvestmentLots,
+  useAddLot,
   investmentTypeConfig,
 } from '../../hooks/useInvestments';
 import { useAccounts } from '../../hooks/useAccounts';
+import LotHistoryTable from './LotHistoryTable';
 import clsx from 'clsx';
+
+const lotSchema = z.object({
+  side: z.enum(['BUY', 'SELL']),
+  quantity: z.number().positive('Quantidade deve ser positiva'),
+  unitPrice: z.number().positive('Preco deve ser positivo'),
+  fees: z.number().min(0).optional(),
+  tradeDate: z.string().min(1, 'Data e obrigatoria'),
+  notes: z.string().optional(),
+});
+
+type LotFormData = z.infer<typeof lotSchema>;
+
+function LotTab({ investment }: { investment: Investment }) {
+  const { data: lots, isLoading } = useInvestmentLots(investment.id);
+  const addLot = useAddLot(investment.id);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<LotFormData>({
+    resolver: zodResolver(lotSchema),
+    defaultValues: {
+      side: 'BUY',
+      tradeDate: format(new Date(), 'yyyy-MM-dd'),
+    },
+  });
+
+  const onSubmit = async (data: LotFormData) => {
+    try {
+      await addLot.mutateAsync(data);
+      reset({ side: 'BUY', tradeDate: format(new Date(), 'yyyy-MM-dd') });
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="card space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">Operacao</label>
+            <select className="input" aria-label="Tipo de operacao" {...register('side')}>
+              <option value="BUY">Compra</option>
+              <option value="SELL">Venda</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Data *</label>
+            <input type="date" className="input" {...register('tradeDate')} />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="label">Quantidade *</label>
+            <input
+              type="number"
+              step="0.00000001"
+              className={clsx('input', errors.quantity && 'input-error')}
+              {...register('quantity', { valueAsNumber: true })}
+            />
+            {errors.quantity && (
+              <p className="mt-1 text-sm text-danger-500">{errors.quantity.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="label">Preco unitario *</label>
+            <input
+              type="number"
+              step="0.01"
+              className={clsx('input', errors.unitPrice && 'input-error')}
+              {...register('unitPrice', { valueAsNumber: true })}
+            />
+            {errors.unitPrice && (
+              <p className="mt-1 text-sm text-danger-500">{errors.unitPrice.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="label">Taxas</label>
+            <input
+              type="number"
+              step="0.01"
+              className="input"
+              placeholder="0,00"
+              {...register('fees', { valueAsNumber: true })}
+            />
+          </div>
+        </div>
+        <button type="submit" className="btn-primary" disabled={isSubmitting}>
+          {isSubmitting ? 'Lancando...' : 'Lancar operacao'}
+        </button>
+      </form>
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-gray-900">Historico de operacoes</h3>
+        {isLoading ? (
+          <p className="text-sm text-gray-500">Carregando...</p>
+        ) : (
+          <LotHistoryTable investmentId={investment.id} lots={lots ?? []} />
+        )}
+      </div>
+    </div>
+  );
+}
 
 const investmentSchema = z.object({
   type: z.enum([
@@ -72,6 +181,11 @@ export default function InvestmentModal({
   const { data: accountsData } = useAccounts();
 
   const isEditing = !!investment;
+  const [activeTab, setActiveTab] = useState<'detalhes' | 'lancar'>('detalhes');
+
+  useEffect(() => {
+    if (isOpen) setActiveTab('detalhes');
+  }, [isOpen, investment]);
 
   const {
     register,
@@ -184,6 +298,38 @@ export default function InvestmentModal({
       title={isEditing ? 'Editar Investimento' : 'Novo Investimento'}
       size="lg"
     >
+      {isEditing && investment && (
+        <div className="mb-4 flex gap-2 border-b border-gray-100">
+          <button
+            type="button"
+            onClick={() => setActiveTab('detalhes')}
+            className={clsx(
+              'border-b-2 px-3 py-2 text-sm font-medium',
+              activeTab === 'detalhes'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            Detalhes
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('lancar')}
+            className={clsx(
+              'border-b-2 px-3 py-2 text-sm font-medium',
+              activeTab === 'lancar'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            Lancar operacao
+          </button>
+        </div>
+      )}
+
+      {isEditing && investment && activeTab === 'lancar' ? (
+        <LotTab investment={investment} />
+      ) : (
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {/* Investment Type */}
         {!isEditing && (
@@ -451,6 +597,7 @@ export default function InvestmentModal({
           </button>
         </div>
       </form>
+      )}
     </Modal>
   );
 }

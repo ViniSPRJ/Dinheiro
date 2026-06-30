@@ -9,6 +9,9 @@ import { rateLimit } from 'express-rate-limit';
 import { config } from './config/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { logger } from './utils/logger.js';
+import { registerQuoteRefreshJob } from './jobs/quoteRefreshJob.js';
+import { registerIndexSyncJob } from './jobs/indexSyncJob.js';
+import { registerPortfolioSnapshotJob } from './jobs/portfolioSnapshotJob.js';
 
 // Routes
 import authRoutes from './routes/auth.routes.js';
@@ -18,6 +21,9 @@ import transactionRoutes from './routes/transaction.routes.js';
 import categoryRoutes from './routes/category.routes.js';
 import budgetRoutes from './routes/budget.routes.js';
 import investmentRoutes from './routes/investment.routes.js';
+import dividendRoutes from './routes/dividend.routes.js';
+import riskRoutes from './routes/risk.routes.js';
+import taxRoutes from './routes/tax.routes.js';
 import goalRoutes from './routes/goal.routes.js';
 import tagRoutes from './routes/tag.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
@@ -73,6 +79,9 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/investments', investmentRoutes);
+app.use('/api/dividends', dividendRoutes);
+app.use('/api/risk', riskRoutes);
+app.use('/api/tax', taxRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -93,5 +102,9 @@ app.listen(PORT, () => {
   logger.info(`📊 Environment: ${config.nodeEnv}`);
   logger.info(`🔗 Frontend URL: ${config.frontendUrl}`);
 });
+
+registerQuoteRefreshJob();
+registerIndexSyncJob();
+registerPortfolioSnapshotJob();
 
 export default app;
